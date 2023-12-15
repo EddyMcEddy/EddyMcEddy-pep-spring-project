@@ -1,11 +1,17 @@
 package com.example.repository;
 
-import com.example.entity.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface AccountRepository extends JpaRepository<Account, Integer> {
+import com.example.entity.Account;
 
-    // Additional methods specific to Account entity can be defined here if needed
+public interface AccountRepository extends JpaRepository<Account, Integer> {
+   
+       /*Question 1 */
     Account findByUsername(String username);
-    Account findByUsernameAndPassword(String username, String password);
+    // ... other repository methods if needed
+
+    
 }
+
+
+

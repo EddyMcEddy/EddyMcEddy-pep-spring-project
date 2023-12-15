@@ -1,21 +1,25 @@
 package com.example.controller;
+
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.example.entity.Account;
 import com.example.entity.Message;
-import com.example.repository.AccountRepository;
-import com.example.repository.MessageRepository;
-
-//import org.hibernate.mapping.Map;
-//import org.hibernate.mapping.List;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
+import com.example.service.AccountService;
+import com.example.service.MessageService;
 
 /**
  * TODO: You will need to write your own endpoints and handlers for your controller using Spring. The endpoints you will need can be
@@ -24,170 +28,120 @@ import org.springframework.web.bind.annotation.*;
  * refer to prior mini-project labs and lecture materials for guidance on how a controller may be built.
  */
 @RestController
- public class SocialMediaController {
-    @Autowired
-    private AccountRepository accountRepository;
+public class SocialMediaController {
 
     @Autowired
-    private MessageRepository messageRepository;
+    private AccountService accountService;
+    @Autowired
+    private MessageService messageService;
 
-    // Existing registration endpoint
+    /*Question 1 */
     @PostMapping("/register")
-    public ResponseEntity<Account> registerUser(@RequestBody Account account) {
-        // Check if the username is not blank and the password is at least 4 characters long
-        if (isValidRegistration(account)) {
-            // Check if an Account with that username already exists
-            if (accountRepository.findByUsername(account.getUsername()) == null) {
-                // Registration is successful
-                Account registeredAccount = accountRepository.save(account);
-                return new ResponseEntity<>(registeredAccount, HttpStatus.OK);
+public ResponseEntity<Account> registerUser(@RequestBody Account newAccount) {
+    try {
+        Account savedAccount = accountService.registerUser(newAccount);
+        return ResponseEntity.status(HttpStatus.OK).body(savedAccount);
+    } catch (DuplicateKeyException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+    }
+}
+
+
+/*Question 2: User Login */
+@PostMapping("/login")
+    public ResponseEntity<Account> loginUser(@RequestBody Account loginAccount) {
+        try {
+            // Find the user by username
+            Account existingAccount = accountService.findByUsername(loginAccount.getUsername());
+
+            // Check if the account exists and the password matches
+            if (existingAccount != null && existingAccount.getPassword().equals(loginAccount.getPassword())) {
+                // Login successful
+                return ResponseEntity.status(HttpStatus.OK).body(existingAccount);
             } else {
-                // Duplicate username, return 409 Conflict
-                return new ResponseEntity<>(HttpStatus.CONFLICT);
+                // Login failed
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
-        } else {
-            // Invalid registration, return 400 Bad Request
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        } catch (IllegalArgumentException e) {
+            // Handle invalid input
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
     }
 
-   
+/*Question 3 */
+@PostMapping("/messages")
+    public ResponseEntity<Message> createMessage(@RequestBody Message newMessage) {
+        try {
+            Message savedMessage = messageService.createMessage(newMessage);
+            return ResponseEntity.ok(savedMessage);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
 
+    /*Question 4 */
     @GetMapping("/messages")
     public ResponseEntity<List<Message>> getAllMessages() {
-        List<Message> messages = messageRepository.findAll();
-
-        // Return the list of messages in the response body
-        return new ResponseEntity<>(messages, HttpStatus.OK);
+        List<Message> messages = messageService.getAllMessages();
+        return ResponseEntity.ok(messages); // This will always return HTTP 200
     }
 
-    // Existing login endpoint
-    @PostMapping("/login")
-    public ResponseEntity<Account> loginUser(@RequestBody Account loginRequest) {
-        // Check if the provided username and password match an existing account
-        Account existingAccount = accountRepository.findByUsernameAndPassword(
-                loginRequest.getUsername(), loginRequest.getPassword());
-
-        if (existingAccount != null) {
-            // Login successful, return the account details with 200 OK
-            return new ResponseEntity<>(existingAccount, HttpStatus.OK);
-        } else {
-            // Login unsuccessful, return 401 Unauthorized
-            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
-        }
-    }
-
-    // New message creation endpoint
-    @PostMapping("/messages")
-    public ResponseEntity<Message> createMessage(@RequestBody Message message) {
-        // Check if the message_text is not blank and under 255 characters
-        if (isValidMessageCreation(message)) {
-            // Check if posted_by refers to a real, existing user
-            Account existingAccount = accountRepository.findById(message.getPosted_by()).orElse(null);
-
-            if (existingAccount != null) {
-                // Creation of the message is successful
-                Message createdMessage = messageRepository.save(message);
-                return new ResponseEntity<>(createdMessage, HttpStatus.OK);
-            } else {
-                // Invalid user, return 400 Bad Request
-                return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-            }
-        } else {
-            // Invalid message creation, return 400 Bad Request
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
-    }
-
+    /*question 5 */
     @GetMapping("/messages/{message_id}")
-public ResponseEntity<Message> getMessageById(@PathVariable("message_id") Integer messageId) {
-    // Find the message by ID
-    Message message = messageRepository.findById(messageId).orElse(null);
-
-    // Return the message in the response body
-    return new ResponseEntity<>(message, HttpStatus.OK);
-}
-
-@DeleteMapping("/messages/{message_id}")
-public ResponseEntity<Object> deleteMessageById(@PathVariable("message_id") Integer messageId) {
-    // Check if the message exists
-    if (messageRepository.existsById(messageId)) {
-        // Delete the message
-        messageRepository.deleteById(messageId);
-
-        // Return the number of rows updated (1) in the response body
-        return new ResponseEntity<>(1, HttpStatus.OK);
-    } else {
-        // Message does not exist, return an empty response body
-        return new ResponseEntity<>(HttpStatus.OK);
-    }
-}
-    // Helper method to check if the registration is valid
-    private boolean isValidRegistration(Account account) {
-        return account.getUsername() != null &&
-                !account.getUsername().isBlank() &&
-                account.getPassword() != null &&
-                account.getPassword().length() >= 4;
+    public ResponseEntity<Message> findMessageById(@PathVariable Integer message_id) {
+        Optional<Message> message = messageService.getMessageById(message_id);
+        return message.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.ok(null));
     }
 
-    // Helper method to check if the message creation is valid
-    private boolean isValidMessageCreation(Message message) {
-        return message.getMessage_text() != null &&
-                !message.getMessage_text().isBlank() &&
-                message.getMessage_text().length() < 255;
-    }
-
-
-    
-
-
-    
-
-
-
-
-    @PatchMapping("/messages/{message_id}")
-public ResponseEntity<Object> updateMessageText(
-        @PathVariable("message_id") Integer messageId,
-        @RequestBody Map<String, String> requestBody) {
-
-    // Check if the message exists
-    Optional<Message> optionalMessage = messageRepository.findById(messageId);
-    if (optionalMessage.isPresent()) {
-        Message existingMessage = optionalMessage.get();
-
-        // Get the new message_text from the request body
-        String newMessageText = requestBody.get("message_text");
-
-        // Check if the new message_text is not blank and not over 255 characters
-        if (newMessageText != null && !newMessageText.isBlank() && newMessageText.length() <= 255) {
-            // Update the message_text
-            existingMessage.setMessage_text(newMessageText);
-
-            // Save the updated message to the database
-            messageRepository.save(existingMessage);
-
-            // Return the number of rows updated (1) in the response body
-            return new ResponseEntity<>(1, HttpStatus.OK);
-        } else {
-            // Invalid new message_text, return 400 Bad Request
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    /*question 6 */
+    @DeleteMapping("/messages/{message_id}")
+    public ResponseEntity<?> deleteMessage(@PathVariable Integer message_id) {
+        int rowsAffected = messageService.deleteMessageById(message_id);
+        if (rowsAffected == 0) {
+            return ResponseEntity.ok().body(""); // Return empty response body
         }
-    } else {
-        // Message does not exist, return 400 Bad Request
-        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        return ResponseEntity.ok().body(rowsAffected); // This line might not be needed based on your test cases
     }
-}
 
-
-
-
-
-
-
-
+ 
     
+   /*question 7 */
+   @PatchMapping("/messages/{message_id}")
+   public ResponseEntity<Integer> updateMessage(@PathVariable Integer message_id, @RequestBody String newMessageText) {
+       try {
+           int rowsAffected = messageService.updateMessageText(message_id, newMessageText);
+           return ResponseEntity.ok(rowsAffected); // Returns the count of rows affected
+       } catch (IllegalArgumentException e) {
+           return ResponseEntity.status(HttpStatus.BAD_REQUEST).build(); // Client error
+       }
+   }
+
+  
+  // @GetMapping("/accounts/{userId}/messages")
+   //public ResponseEntity<List<Message>> getMessagesForUser(@PathVariable Integer userId) {
+   //    List<Message> messages = messageService.findMessagesByUserId(userId);
+   //    return ResponseEntity.ok(messages);
+  // }
+   
+
+  
+
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
